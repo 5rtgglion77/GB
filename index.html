@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>STORM ARENA</title>
+<style>
+*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#101923;color:white;font-family:system-ui,Arial;touch-action:none}
+canvas{display:block;width:100vw;height:100vh;background:#243b35}
+#hud{position:fixed;top:10px;left:10px;right:10px;display:flex;justify-content:space-between;pointer-events:none;text-shadow:0 2px 4px #000;font-weight:800}
+#help{position:fixed;top:48px;left:10px;font-size:12px;color:#e7f5ee;text-shadow:0 1px 3px #000;pointer-events:none}
+#overlay{position:fixed;inset:0;background:#07111ddd;display:flex;align-items:center;justify-content:center;text-align:center;padding:24px}
+.panel{max-width:420px;background:#182a35;border:1px solid #527080;border-radius:22px;padding:28px;box-shadow:0 15px 60px #0009}
+h1{font-size:36px;margin:0 0 8px;color:#8cffb4;letter-spacing:2px}
+button{border:0;border-radius:14px;padding:14px 24px;background:#8cffb4;color:#10251b;font-size:18px;font-weight:900;margin-top:16px}
+#controls{position:fixed;inset:0;pointer-events:none}
+.pad{position:absolute;bottom:22px;width:130px;height:130px;border-radius:50%;background:#ffffff20;border:2px solid #ffffff55;pointer-events:auto;touch-action:none}
+#joy{left:18px}#fire{right:18px;width:92px;height:92px;bottom:34px;background:#ff765c99;display:grid;place-items:center;font-weight:900}
+#build{right:120px;bottom:38px;width:72px;height:72px;border-radius:50%;background:#5cb6ff99;display:grid;place-items:center;font-weight:900}
+#rotate{right:120px;bottom:120px;width:58px;height:58px;border-radius:50%;background:#ffffff33;display:grid;place-items:center;font-weight:900}
+@media(pointer:fine){#controls{opacity:.5}}
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<div id="hud"><span id="stats">❤️ 100　⚡ 0</span><span id="zone">STORM ARENA</span></div>
+<div id="help">WASD / Pfeile: bewegen · Maus: zielen · Klick: schießen · E: Wand · Shift: Sprint · R: Neustart</div>
+<div id="controls"><div class="pad" id="joy"></div><div class="pad" id="fire">FEUER</div><div class="pad" id="build">WAND</div><div class="pad" id="rotate">↻</div></div>
+<div id="overlay"><div class="panel"><h1>STORM ARENA</h1><p>Überlebe, sammle Heilung und bleib innerhalb der Sturmzone. Besiege die Bots!</p><button id="start">SPIEL STARTEN</button><p style="font-size:12px;color:#b9cbd1">Einzelspieler · funktioniert im Browser</p></div></div>
+<script>
+(()=>{
+const canvas=document.getElementById('game'),ctx=canvas.getContext('2d');
+let W,H,scale=1,player,bots,bullets,meds,walls,keys={},running=false,ended=false,score=0,frame=0,zoneR=900,angle=0,joy={x:0,y:0},fire=false,buildAngle=0;
+function resize(){W=canvas.width=innerWidth*devicePixelRatio;H=canvas.height=innerHeight*devicePixelRatio;scale=devicePixelRatio;ctx.setTransform(scale,0,0,scale,0,0);W=innerWidth;H=innerHeight}
+addEventListener('resize',resize);resize();
+const rand=(a,b)=>a+Math.random()*(b-a),dist=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
+function reset(){player={x:0,y:0,hp:100,r:15,speed:3};bots=Array.from({length:12},(_,i)=>({x:rand(-650,650),y:rand(-650,650),hp:50,r:14,cd:rand(30,100)}));bullets=[];meds=Array.from({length:8},()=>({x:rand(-700,700),y:rand(-700,700)}));walls=[];score=0;frame=0;zoneR=900;ended=false;running=true;document.getElementById('overlay').style.display='none'}
+function shoot(from,target,owner){let a=Math.atan2(target.y-from.y,target.x-from.x);bullets.push({x:from.x,y:from.y,vx:Math.cos(a)*8,vy:Math.sin(a)*8,owner,life:90})}
+function addWall(){walls.push({x:player.x+Math.cos(angle)*55,y:player.y+Math.sin(angle)*55,a:angle,life:900})}
+function finish(win){running=false;ended=true;document.querySelector('#overlay h1').textContent=win?'SIEG!':'GAME OVER';document.querySelector('#overlay p').textContent=`Punkte: ${score} · Tippe auf Neustart und versuch es nochmal.`;document.getElementById('start').textContent='NOCHMAL SPIELEN';document.getElementById('overlay').style.display='flex'}
+function update(){
+ if(!running)return;frame++;
+ let dx=(keys.d||keys.ArrowRight?1:0)-(keys.a||keys.ArrowLeft?1:0)+joy.x,dy=(keys.s||keys.ArrowDown?1:0)-(keys.w||keys.ArrowUp?1:0)+joy.y;
+ let len=Math.hypot(dx,dy)||1,spd=player.speed*(keys.Shift?1.5:1);player.x+=dx/len*spd;player.y+=dy/len*spd;
+ if(keys.e){addWall();keys.e=false}
+ if(keys[' ']){shoot(player,{x:player.x+Math.cos(angle)*500,y:player.y+Math.sin(angle)*500},'p');keys[' ']=false}
+ if(fire&&frame%10===0)shoot(player,{x:player.x+Math.cos(angle)*500,y:player.y+Math.sin(angle)*500},'p');
+ bots.forEach(b=>{let d=dist(b,player),a=Math.atan2(player.y-b.y,player.x-b.x);if(d>100){b.x+=Math.cos(a)*.8;b.y+=Math.sin(a)*.8}else{b.x-=Math.cos(a)*.4;b.y-=Math.sin(a)*.4}if(--b.cd<=0&&d<650){shoot(b,player,'b');b.cd=rand(55,110)}});
+ bullets=bullets.filter(q=>{q.x+=q.vx;q.y+=q.vy;q.life--;if(q.life<=0)return false;
+ if(q.owner==='p'){for(let b of bots)if(b.hp>0&&Math.hypot(q.x-b.x,q.y-b.y)<b.r){b.hp-=25;if(b.hp<=0)score++;return false}}
+ else if(Math.hypot(q.x-player.x,q.y-player.y)<player.r){player.hp-=8;return false}return true});
+ bots=bots.filter(b=>b.hp>0);
+ meds=meds.filter(m=>{if(dist(m,player)<25){player.hp=Math.min(100,player.hp+30);return false}return true});
+ walls=walls.filter(w=>--w.life>0);
+ zoneR=Math.max(170,900-frame*.12);if(Math.hypot(player.x,player.y)>zoneR)player.hp-=.12;
+ if(player.hp<=0)finish(false);if(!bots.length)finish(true);
+ document.getElementById('stats').textContent=`❤️ ${Math.max(0,Math.ceil(player.hp))}　⚡ ${score}`;document.getElementById('zone').textContent=`Bots: ${bots.length} · Zone: ${Math.round(zoneR)}`;
+}
+function draw(){
+ ctx.clearRect(0,0,W,H);ctx.fillStyle='#29483c';ctx.fillRect(0,0,W,H);
+ let camX=player?player.x:0,camY=player?player.y:0,ox=W/2-camX,oy=H/2-camY;
+ ctx.save();ctx.translate(ox,oy);
+ ctx.strokeStyle='#ffffff12';ctx.lineWidth=1;for(let x=Math.floor((camX-W/2)/80)*80;x<camX+W/2+80;x+=80){ctx.beginPath();ctx.moveTo(x,camY-H/2-100);ctx.lineTo(x,camY+H/2+100);ctx.stroke()}for(let y=Math.floor((camY-H/2)/80)*80;y<camY+H/2+100;y+=80){ctx.beginPath();ctx.moveTo(camX-W/2-100,y);ctx.lineTo(camX+W/2+100,y);ctx.stroke()}
+ ctx.strokeStyle='#70aaff';ctx.lineWidth=5;ctx.beginPath();ctx.arc(0,0,zoneR,0,Math.PI*2);ctx.stroke();
+ walls.forEach(w=>{ctx.save();ctx.translate(w.x,w.y);ctx.rotate(w.a);ctx.fillStyle='#b9a17a';ctx.fillRect(-26,-7,52,14);ctx.restore()});
+ meds.forEach(m=>{ctx.fillStyle='#ff5555';ctx.fillRect(m.x-9,m.y-9,18,18);ctx.fillStyle='white';ctx.fillRect(m.x-2,m.y-7,4,14);ctx.fillRect(m.x-7,m.y-2,14,4)});
+ bots.forEach(b=>{ctx.fillStyle='#ed795e';ctx.beginPath();ctx.arc(b.x,b.y,b.r,0,7);ctx.fill();ctx.fillStyle='#222';ctx.fillRect(b.x-15,b.y-24,30,4);ctx.fillStyle='#9fef8d';ctx.fillRect(b.x-15,b.y-24,30*b.hp/50,4)});
+ bullets.forEach(q=>{ctx.fillStyle=q.owner==='p'?'#ffe66b':'#ff8c70';ctx.beginPath();ctx.arc(q.x,q.y,4,0,7);ctx.fill()});
+ if(player){ctx.fillStyle='#69c7ff';ctx.beginPath();ctx.arc(player.x,player.y,player.r,0,7);ctx.fill();ctx.strokeStyle='white';ctx.lineWidth=4;ctx.beginPath();ctx.moveTo(player.x,player.y);ctx.lineTo(player.x+Math.cos(angle)*25,player.y+Math.sin(angle)*25);ctx.stroke()}
+ ctx.restore();
+}
+function loop(){update();if(player)draw();requestAnimationFrame(loop)}
+document.getElementById('start').addEventListener('click',reset);
+addEventListener('keydown',e=>{keys[e.key]=true;if(e.key==='r'||e.key==='R'){if(!running)reset()}});
+addEventListener('keyup',e=>keys[e.key]=false);
+canvas.addEventListener('pointermove',e=>{if(e.pointerType==='mouse'&&player)angle=Math.atan2(e.clientY-H/2,e.clientX-W/2)});
+canvas.addEventListener('pointerdown',e=>{if(e.pointerType==='mouse'&&player){angle=Math.atan2(e.clientY-H/2,e.clientX-W/2);shoot(player,{x:player.x+Math.cos(angle)*500,y:player.y+Math.sin(angle)*500},'p')}});
+function bindPad(id,fn){let el=document.getElementById(id);el.addEventListener('pointerdown',e=>{el.setPointerCapture(e.pointerId);fn('down',e)});el.addEventListener('pointermove',e=>fn('move',e));el.addEventListener('pointerup',e=>fn('up',e));el.addEventListener('pointercancel',e=>fn('up',e))}
+let joyOrigin=null;
+bindPad('joy',(type,e)=>{let r=document.getElementById('joy').getBoundingClientRect();if(type==='down')joyOrigin={x:r.left+r.width/2,y:r.top+r.height/2};if(type==='up'){joy={x:0,y:0};joyOrigin=null}if(type==='move'&&joyOrigin){let x=e.clientX-joyOrigin.x,y=e.clientY-joyOrigin.y,l=Math.hypot(x,y)||1;joy={x:x/Math.max(48,l),y:y/Math.max(48,l)}}});
+bindPad('fire',(t)=>{fire=t!=='up'});bindPad('build',(t)=>{if(t==='down')addWall()});bindPad('rotate',(t)=>{if(t==='down')angle+=Math.PI/4});
+reset();running=false;document.getElementById('overlay').style.display='flex';requestAnimationFrame(loop);
+})();
+</script>
+</body></html>
