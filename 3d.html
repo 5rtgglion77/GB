@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>STORM ARENA 3D</title>
+<style>
+*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#91c9e8;font-family:system-ui,Arial;color:#fff;touch-action:none}
+#view{position:fixed;inset:0}canvas{display:block}
+#top{position:fixed;top:10px;left:10px;right:10px;display:flex;justify-content:space-between;gap:8px;pointer-events:none;text-shadow:0 2px 5px #24333c;font-weight:800}
+#tools{position:fixed;top:48px;left:10px;display:flex;gap:6px;flex-wrap:wrap;max-width:70%}
+button{border:1px solid #ffffff66;border-radius:12px;background:#172d3ddd;color:white;padding:10px 12px;font-weight:800;font-size:13px}
+button.active{background:#8cffb4;color:#12301e}
+#menu{position:fixed;inset:0;background:#081522bb;display:flex;align-items:center;justify-content:center;padding:18px}
+.panel{width:min(440px,95vw);background:#172b3a;border:1px solid #7893a4;border-radius:20px;padding:22px;box-shadow:0 14px 55px #0008}
+h1{margin:0;color:#9dffc0;font-size:30px}p{line-height:1.4;color:#d7e7ef}
+#controls{position:fixed;inset:0;pointer-events:none}
+#joy{position:absolute;left:18px;bottom:20px;width:130px;height:130px;border-radius:50%;background:#ffffff22;border:2px solid #ffffff66;pointer-events:auto}
+#stick{position:absolute;width:48px;height:48px;left:39px;top:39px;border-radius:50%;background:#ffffff99}
+#action{position:absolute;right:16px;bottom:22px;display:grid;grid-template-columns:repeat(2,76px);gap:8px;pointer-events:auto}
+#action button{height:58px;background:#18354bdc}
+#settings{display:none;position:fixed;inset:0;background:#081522cc;align-items:center;justify-content:center;padding:18px}
+.small{font-size:12px;color:#bed0d9}
+</style>
+</head>
+<body>
+<div id="view"></div>
+<div id="top"><span>STORM ARENA 3D</span><span id="status">Baumodus: Wand</span></div>
+<div id="tools">
+<button class="active" data-piece="wall">WAND</button><button data-piece="floor">BODEN</button><button data-piece="ramp">TREPPE</button><button data-piece="cone">CONE</button>
+<button id="edit">EDIT: AUS</button><button id="settingsBtn">⚙ EINSTELLUNGEN</button>
+</div>
+<div id="controls"><div id="joy"><div id="stick"></div></div><div id="action">
+<button id="build">BAUEN</button><button id="jump">SPRINGEN</button><button id="rotate">DREHEN</button><button id="remove">ENTFERNEN</button>
+</div></div>
+<div id="menu"><div class="panel"><h1>STORM ARENA 3D</h1><p>Deine erste 3D-Bauarena! Bewege dich in Third Person, springe und platziere Bauteile.</p><p class="small">Tastatur: WASD bewegen · Leertaste springen · Q bauen · R drehen · X entfernen · Maus ziehen zum Umsehen. Auf dem iPad: Joystick und Buttons.</p><button id="start">SPIEL STARTEN</button></div></div>
+<div id="settings"><div class="panel"><h1>Einstellungen</h1><p>Steuerung (erste Version)</p><p>Bewegen: WASD / Pfeiltasten<br>Springen: Leertaste<br>Bauen: Q<br>Drehen: R<br>Entfernen: X</p><p class="small">Eigene Tastenbelegung und Bauteil-Editing kommen als nächster Schritt.</p><button id="closeSettings">SCHLIESSEN</button></div></div>
+<script type="module">
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js';
+const root=document.getElementById('view');
+const scene=new THREE.Scene();scene.background=new THREE.Color(0x91c9e8);scene.fog=new THREE.Fog(0x91c9e8,35,100);
+const camera=new THREE.PerspectiveCamera(65,innerWidth/innerHeight,.1,200);
+const renderer=new THREE.WebGLRenderer({antialias:true});renderer.setPixelRatio(Math.min(devicePixelRatio,1.6));renderer.setSize(innerWidth,innerHeight);renderer.shadowMap.enabled=true;root.appendChild(renderer.domElement);
+scene.add(new THREE.HemisphereLight(0xffffff,0x55705a,2));
+const sun=new THREE.DirectionalLight(0xffffff,2.2);sun.position.set(-12,22,10);sun.castShadow=true;scene.add(sun);
+const ground=new THREE.Mesh(new THREE.PlaneGeometry(180,180),new THREE.MeshStandardMaterial({color:0x5c9c65,roughness:1}));ground.rotation.x=-Math.PI/2;ground.receiveShadow=true;scene.add(ground);
+const grid=new THREE.GridHelper(180,90,0xffffff,0xffffff);grid.position.y=.015;grid.material.opacity=.12;grid.material.transparent=true;scene.add(grid);
+for(let i=0;i<24;i++){let x=(Math.random()-.5)*100,z=(Math.random()-.5)*100;if(Math.hypot(x,z)<13)continue;let trunk=new THREE.Mesh(new THREE.CylinderGeometry(.25,.35,2,7),new THREE.MeshStandardMaterial({color:0x76513a}));trunk.position.set(x,1,z);trunk.castShadow=true;scene.add(trunk);let crown=new THREE.Mesh(new THREE.ConeGeometry(1.5,3.5,7),new THREE.MeshStandardMaterial({color:0x28734a}));crown.position.set(x,3.6,z);crown.castShadow=true;scene.add(crown)}
+const player=new THREE.Group();scene.add(player);
+const body=new THREE.Mesh(new THREE.CapsuleGeometry(.48,.9,4,8),new THREE.MeshStandardMaterial({color:0x268bd2,roughness:.75}));body.position.y=1.15;body.castShadow=true;player.add(body);
+const head=new THREE.Mesh(new THREE.SphereGeometry(.34,12,10),new THREE.MeshStandardMaterial({color:0xf1c7a5}));head.position.y=2;head.castShadow=true;player.add(head);
+const pack=new THREE.Mesh(new THREE.BoxGeometry(.65,.75,.28),new THREE.MeshStandardMaterial({color:0x26394c}));pack.position.set(0,1.25,.48);player.add(pack);
+let yaw=0,vy=0,onGround=true,selected='wall',editing=false,builds=[],keys={},move={x:0,y:0},cameraYaw=0,drag=null;
+const mat=new THREE.MeshStandardMaterial({color:0xb98b5c,roughness:.85});
+function buildPiece(){let geo,mesh;if(selected==='wall'){geo=new THREE.BoxGeometry(3,2.8,.22);mesh=new THREE.Mesh(geo,mat.clone());mesh.position.y=1.4}
+else if(selected==='floor'){geo=new THREE.BoxGeometry(3,.18,3);mesh=new THREE.Mesh(geo,mat.clone());mesh.position.y=.12}
+else if(selected==='ramp'){geo=new THREE.BoxGeometry(3,.22,3);mesh=new THREE.Mesh(geo,mat.clone());mesh.rotation.x=-Math.PI/5;mesh.position.y=.85}
+else{geo=new THREE.ConeGeometry(2.05,1.8,4);mesh=new THREE.Mesh(geo,mat.clone());mesh.position.y=.9;mesh.rotation.y=Math.PI/4}
+mesh.position.x=player.position.x+Math.sin(yaw)*3.5;mesh.position.z=player.position.z+Math.cos(yaw)*3.5;mesh.rotation.y+=yaw;mesh.castShadow=true;mesh.receiveShadow=true;scene.add(mesh);builds.push(mesh);document.getElementById('status').textContent='Bauteile: '+builds.length+' · '+selected.toUpperCase()}
+function removePiece(){const m=builds.pop();if(m)scene.remove(m);document.getElementById('status').textContent='Bauteile: '+builds.length}
+function jump(){if(onGround){vy=7;onGround=false}}
+function action(k){if(k==='q')buildPiece();if(k==='r'){yaw+=Math.PI/4;player.rotation.y=yaw}if(k==='x')removePiece();if(k===' ')jump()}
+addEventListener('keydown',e=>{let k=e.key.toLowerCase();keys[k]=true;if([' ','arrowup','arrowdown','arrowleft','arrowright'].includes(k))e.preventDefault();if(!e.repeat&&['q','r','x',' '].includes(k))action(k)});
+addEventListener('keyup',e=>keys[e.key.toLowerCase()]=false);
+document.querySelectorAll('[data-piece]').forEach(b=>b.onclick=()=>{selected=b.dataset.piece;document.querySelectorAll('[data-piece]').forEach(x=>x.classList.toggle('active',x===b));document.getElementById('status').textContent='Baumodus: '+selected});
+document.getElementById('build').onclick=buildPiece;document.getElementById('jump').onclick=jump;document.getElementById('rotate').onclick=()=>action('r');document.getElementById('remove').onclick=removePiece;
+document.getElementById('edit').onclick=()=>{editing=!editing;document.getElementById('edit').textContent='EDIT: '+(editing?'AN':'AUS');document.getElementById('status').textContent=editing?'Edit-Modus: Bauteil antippen':'Baumodus: '+selected};
+document.getElementById('settingsBtn').onclick=()=>document.getElementById('settings').style.display='flex';document.getElementById('closeSettings').onclick=()=>document.getElementById('settings').style.display='none';
+document.getElementById('start').onclick=()=>document.getElementById('menu').style.display='none';
+const joy=document.getElementById('joy'),stick=document.getElementById('stick');let joyId=null;
+joy.addEventListener('pointerdown',e=>{joyId=e.pointerId;joy.setPointerCapture(joyId);joyMove(e)});
+joy.addEventListener('pointermove',e=>{if(e.pointerId===joyId)joyMove(e)});
+function joyMove(e){const r=joy.getBoundingClientRect(),cx=r.left+r.width/2,cy=r.top+r.height/2,dx=e.clientX-cx,dy=e.clientY-cy,l=Math.hypot(dx,dy),m=Math.min(42,l),a=Math.atan2(dy,dx);move.x=Math.cos(a)*m/42;move.y=Math.sin(a)*m/42;stick.style.transform=`translate(${move.x*42}px,${move.y*42}px)`}
+function joyEnd(){joyId=null;move={x:0,y:0};stick.style.transform='translate(0,0)'}joy.addEventListener('pointerup',joyEnd);joy.addEventListener('pointercancel',joyEnd);
+renderer.domElement.addEventListener('pointerdown',e=>{if(e.pointerType==='mouse')drag={x:e.clientX,y:e.clientY}});
+addEventListener('pointerup',()=>drag=null);addEventListener('pointermove',e=>{if(drag){cameraYaw-=(e.clientX-drag.x)*.006;drag={x:e.clientX,y:e.clientY}}});
+function resize(){camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight)}addEventListener('resize',resize);
+const clock=new THREE.Clock();
+function loop(){requestAnimationFrame(loop);let dt=Math.min(clock.getDelta(),.04);
+let ix=(keys.d||keys.arrowright?1:0)-(keys.a||keys.arrowleft?1:0)+move.x;
+let iz=(keys.s||keys.arrowdown?1:0)-(keys.w||keys.arrowup?1:0)+move.y;
+let len=Math.hypot(ix,iz);if(len>.12){ix/=Math.max(1,len);iz/=Math.max(1,len);let forward=new THREE.Vector3(-Math.sin(cameraYaw),0,-Math.cos(cameraYaw)),right=new THREE.Vector3(Math.cos(cameraYaw),0,-Math.sin(cameraYaw));let dir=right.multiplyScalar(ix).add(forward.multiplyScalar(-iz)).normalize();player.position.addScaledVector(dir,7*dt);yaw=Math.atan2(dir.x,dir.z);player.rotation.y=yaw}
+vy-=18*dt;player.position.y+=vy*dt;if(player.position.y<0){player.position.y=0;vy=0;onGround=true}
+let desired=new THREE.Vector3(player.position.x+Math.sin(cameraYaw)*8,player.position.y+5.5,player.position.z+Math.cos(cameraYaw)*8);camera.position.lerp(desired,1-Math.pow(.001,dt));camera.lookAt(player.position.x,player.position.y+1.2,player.position.z);
+renderer.render(scene,camera)}
+loop();
+</script>
+</body></html>
